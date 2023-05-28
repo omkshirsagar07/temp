@@ -1,0 +1,159 @@
+// g++ -fopenmp filename.cpp -o output
+
+// Write a CUDA Program for : 1. Addition of two large vectors 2. Matrix Multiplication using CUDA C
+// Addition of two large vectors 
+#include <iostream>  
+#include <cuda_runtime.h>
+
+using namespace std;
+
+__global__ void addVectors(int* A, int* B, int* C, int n) 
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x; 
+    if (i < n) 
+    {
+        C[i] = A[i] + B[i];
+    }
+}
+
+int main() 
+{
+    int n = 1000000;  
+    int* A, * B, * C;
+    int size = n * sizeof(int);
+
+    // Allocate memory on the host  
+    cudaMallocHost(&A, size);  
+    cudaMallocHost(&B, size);  
+    cudaMallocHost(&C, size);
+
+    // Initialize the vectors
+    for (int i = 0; i < n; i++) 
+    {
+        A[i] = i;
+        B[i] = i * 2;
+    }
+    // Allocate memory on the device  
+    int* dev_A, * dev_B, * dev_C;  
+    cudaMalloc(&dev_A, size);  
+    cudaMalloc(&dev_B, size);  
+    cudaMalloc(&dev_C, size);
+
+    // Copy data from host to device
+    cudaMemcpy(dev_A, A, size, cudaMemcpyHostToDevice);  
+    cudaMemcpy(dev_B, B, size, cudaMemcpyHostToDevice);
+
+    // Launch the kernel  
+    int blockSize = 256;
+    int numBlocks = (n + blockSize - 1) / blockSize;
+    addVectors<<<numBlocks, blockSize>>>(dev_A, dev_B, dev_C, n);
+
+    // Copy data from device to host
+    cudaMemcpy(C, dev_C, size, cudaMemcpyDeviceToHost);
+
+    // Print the results
+    for (int i = 0; i < 10; i++) 
+    {
+        cout << C[i] << " ";
+    }
+    cout << endl;
+
+    // Free memory  
+    cudaFree(dev_A);  
+    cudaFree(dev_B);  
+    cudaFree(dev_C);  
+    cudaFreeHost(A);  
+    cudaFreeHost(B);  
+    cudaFreeHost(C);
+
+    return 0;
+}
+
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+
+// Matrix Multiplication using CUDA C 
+
+#include<cuda.h>
+#include<stdio.h>
+
+int main(void)
+ {
+    void MatrixMultiplication(float *, float *, float *, int);
+
+    //const int Width = 5;
+
+    float M[5*5], N[5*5], P[5*5];
+
+    for(int i = 0; i < (5*5) ; i++)
+    {
+        M[i] = 5;
+        N[i] = 5;
+        P[i] = 0;
+    }
+    
+ MatrixMultiplication(M, N, P, 5);
+
+    for(int i = 0; i < (5*5) ; i++)
+    {
+        printf("%f \n", P[i]);
+        //printf("%d \n", i);
+    }
+    
+    //int quit;
+    //scanf("%d",&quit);
+
+    return 0;
+}
+
+//Matrix multiplication kernel - thread specification
+__global__ void MatrixMulKernel(float *Md, float *Nd, float *Pd, int width)
+ {
+    //2D Thread ID
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    //Pvalue stores the Pd element that is computed by the thread
+    float Pvalue = 0;
+
+    for(int k = 0; k < 5 ; k++)
+    {
+        float Mdelement = Md[ty*5 + k];
+        float Ndelement = Nd[k*5 + tx];
+        Pvalue = Pvalue + (Mdelement*Ndelement);
+    }
+
+    Pd[ty*5 + tx] = Pvalue;
+ }
+
+void MatrixMultiplication(float *M, float *N, float *P, int width)
+  {
+    int size = 5*5*sizeof(float);
+
+    float *Md, *Nd, *Pd;
+
+    //Transfer M and N to device memory
+    cudaMalloc((void**)&Md, size);
+    cudaMemcpy(Md,M,size,cudaMemcpyHostToDevice);
+    cudaMalloc((void**)&Nd, size);
+    cudaMemcpy(Nd,N,size,cudaMemcpyHostToDevice);
+
+    //Allocate P on the device
+    cudaMalloc((void**)&Pd,size);
+
+    //Setup the execution configuration
+    dim3 dimBlock(5,5);
+    dim3 dimGrid(1,1);
+
+    //Launch the device computation threads!
+    MatrixMulKernel<<<dimGrid,dimBlock>>>(Md,Nd,Pd,5);
+
+    //Transfer P from device to host
+    cudaMemcpy(P,Pd,size,cudaMemcpyDeviceToHost);
+
+    //Free device matrices
+    cudaFree(Md);
+    cudaFree(Nd);
+    cudaFree(Pd);
+ }
